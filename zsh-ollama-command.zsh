@@ -29,7 +29,7 @@ validate_required() {
     echo "Please start it with 'brew services start ollama'"
     return 1;
   fi
-  if ! curl -s "${ZSH_OLLAMA_URL}/api/tags" | command grep -q $ZSH_OLLAMA_MODEL; then
+  if ! command curl -s "${ZSH_OLLAMA_URL}/api/tags" | command grep -q $ZSH_OLLAMA_MODEL; then
     echo "🚨: zsh-ollama-command failed as model ${ZSH_OLLAMA_MODEL} server NOT found!"
     echo "Please start it with 'ollama pull ${ZSH_OLLAMA_MODEL}' or adjust ZSH_OLLAMA_MODEL"
     return 1;
