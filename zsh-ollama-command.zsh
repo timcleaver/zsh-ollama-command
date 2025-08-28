@@ -29,7 +29,7 @@ validate_required() {
     echo "Please start it with 'brew services start ollama'"
     return 1;
   fi
-  if ! curl -s "${ZSH_OLLAMA_URL}/api/tags" | grep -q $ZSH_OLLAMA_MODEL; then
+  if ! curl -s "${ZSH_OLLAMA_URL}/api/tags" | command grep -q $ZSH_OLLAMA_MODEL; then
     echo "🚨: zsh-ollama-command failed as model ${ZSH_OLLAMA_MODEL} server NOT found!"
     echo "Please start it with 'ollama pull ${ZSH_OLLAMA_MODEL}' or adjust ZSH_OLLAMA_MODEL"
     return 1;
@@ -59,7 +59,7 @@ fzf_ollama_commands() {
   print
   print -u1 "👻Please wait..."
 
-  ZSH_OLLAMA_COMMANDS_MESSAGE_CONTENT="Seeking OLLAMA for MacOS terminal commands for the following task: $ZSH_OLLAMA_COMMANDS_USER_QUERY. Reply with an array without newlines consisting solely of possible commands. The format would be like: ['command1; comand2;', 'command3&comand4;']. Response only contains array, no any additional description. No additional text should be present in each entry and commands, remove empty string entry. Each string entry should be a new string entry. If the task need more than one command, combine them in one string entry. Each string entry should only contain the command(s). Do not include empty entry. Provide multiple entry (at most $ZSH_OLLAMA_COMMANDS relevant entry) in response Json suggestions if available. Please ensure response can be parsed by jq"
+  ZSH_OLLAMA_COMMANDS_MESSAGE_CONTENT="Seeking OLLAMA for MacOS terminal commands for the following task: $ZSH_OLLAMA_COMMANDS_USER_QUERY. Reply with an array without newlines consisting solely of possible commands. The format would be like: ['command1; comand2;', 'command3&comand4;']. Response only contains array, no any additional description. No additional text should be present in each entry and commands, remove empty string entry. Each string entry should be a new string entry. If the task need more than one command, combine them in one string entry. Each string entry should only contain the command(s). Do not include empty entry. Provide multiple entry (at most $ZSH_OLLAMA_COMMANDS relevant entry) in response Json suggestions if available. Please ensure response can be parsed by jq. Here are the previous commands the user has run as a comma separated list to help guide the options for completion: $(builtin history | cut -d ' ' -f 2- | tr $'\n' ',')"
 
   ZSH_OLLAMA_COMMANDS_REQUEST_BODY='{
     "model": "'$ZSH_OLLAMA_MODEL'",
@@ -69,16 +69,19 @@ fzf_ollama_commands() {
         "content":  "'$ZSH_OLLAMA_COMMANDS_MESSAGE_CONTENT'"
       }
     ],
-    "stream": false
+    "stream": false,
+    "options": {
+      "response_format": "final"
+    }
   }'
 
-  ZSH_OLLAMA_COMMANDS_RESPONSE=$(curl --silent "${ZSH_OLLAMA_URL}/api/chat" \
+  ZSH_OLLAMA_COMMANDS_RESPONSE=$(command curl --silent "${ZSH_OLLAMA_URL}/api/chat" \
     -H "Content-Type: application/json" \
     -d "$ZSH_OLLAMA_COMMANDS_REQUEST_BODY")
   local ret=$?
 
   # trim response content newline
-  ZSH_OLLAMA_COMMANDS_SUGGESTION=$(echo $ZSH_OLLAMA_COMMANDS_RESPONSE | tr -d '\n\r' | tr -d '\0' | jq '.')
+  ZSH_OLLAMA_COMMANDS_SUGGESTION=$(echo $ZSH_OLLAMA_COMMANDS_RESPONSE | tr -d '\n\r' | command sed 's#<think>.*</think>##g' | tr -d '\0' | jq '.')
   check_status
 
   # collect suggestion commands from response content
@@ -88,12 +91,12 @@ fzf_ollama_commands() {
   # attempts to extract suggestions from ZSH_OLLAMA_COMMANDS_SUGGESTION using jq.
   # If jq fails or returns no output, displays an error message and exits.
   # Otherwise, pipes the output to fzf for interactive selection
-  ZSH_OLLAMA_COMMANDS_SELECTED=$(echo $ZSH_OLLAMA_COMMANDS_SUGGESTION | tr -d '\0' | jq -r '.[]')
+  ZSH_OLLAMA_COMMANDS_SELECTED=$(echo $ZSH_OLLAMA_COMMANDS_SUGGESTION | command sed 's/```//g' | command sed 's/^json//g' | tr -d '\0' | jq -r '.[]')
   check_status
 
   tput cuu 1 # cleanup waiting message
 
-  ZSH_OLLAMA_COMMANDS_SELECTED=$(echo $ZSH_OLLAMA_COMMANDS_SUGGESTION | jq -r '.[]' | fzf --ansi --height=~10 --cycle)
+  ZSH_OLLAMA_COMMANDS_SELECTED=$(echo $ZSH_OLLAMA_COMMANDS_SUGGESTION | command sed 's/```//g' | command sed 's/^json//g' | jq -r '.[]' | fzf --ansi --height=~10 --cycle)
   BUFFER=$ZSH_OLLAMA_COMMANDS_SELECTED
 
   zle end-of-line
